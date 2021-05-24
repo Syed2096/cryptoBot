@@ -49,14 +49,22 @@ stocks = []
 tickers = client.get_all_tickers()
 
 #Load model
-model = load_model("model.h5")
+try:
+    model = load_model("model.h5")
+
+except:
+    print("Collect Data Mode")
+
 prediction_days = 800
-predictedPoints = 60
+predictedPoints = 120
 
 #Number of data points and refresh rate in seconds
 dataPoints = 1000
 refreshRate = 120
 #Time to collect data = dataPoints * refreshRate / 60 mins
+
+#Multiplier for trades, 1 means it will buy all it can, 0.5 means it will trade with half the money in one trade and could spend the other half on another or split it up more
+budgetTolerance = 0.5
 
 #Number of tweets to look at for sentiment analysis
 tweetAmount = 100
@@ -93,6 +101,14 @@ async def collectData():
     try:
         #Loop forever
         while True:
+            # generalChannel = bot.get_channel(805608327538278423)
+            # test = generalChannel.send("Online")
+            # fut = asyncio.run_coroutine_threadsafe(test, bot.loop)
+            # try:
+            #     fut.result()
+            # except Exception as e:
+            #     print("Send Message: " + str(e))  
+
             tickers = client.get_all_tickers()
             #Fill information till there are enough data points
             for stock in stocks:
@@ -131,7 +147,7 @@ async def buy():
                             if float(balance['free']) > 0:
                                 #print("working 2")
                                 if stock.symbol.find(balance['asset']) != -1 and stock.symbol.find(balance['asset']) != 0:
-                                    budget = float(balance['free']) * 0.5
+                                    budget = float(balance['free']) * budgetTolerance
                                     test = client.get_symbol_info(stock.symbol)
                                     try:
                                         minQuantity = float(test['filters'][2]['minQty'])
@@ -161,17 +177,34 @@ async def buy():
                                         makerFees = float(fees['tradeFee'][0]['maker'])
                                         takerFees = float(fees['tradeFee'][0]['taker'])
                                         fees = makerFees + takerFees
-                                        priceChange = (float(stock.predictedPrices[-1]) - stock.prices[-1])
+
+                                        highestPredicted = 0
+                                        for price in stock.predictedPrices:
+                                             if highestPredicted < price:
+                                                 highestPredicted = price  
+
+                                        priceChange = (float(highestPredicted) - stock.prices[-1])
                                         #percentChange = (priceChange / stock.prices[-1]) * 100
                                         moneyMade = priceChange * quantity - fees
                                         #print("MoneyMade: " + str(moneyMade))
                                         #print("Check: " + str(quantity * stock.prices[-1] * 0.02))
                                         #Buy
-                                        if moneyMade > 0:
-                                            print("Buy " + stock.symbol)
+                                        if moneyMade > quantity * stock.prices[-1] * 0.02:
+                                            #print("Buy " + stock.symbol)
                                             orderSuccess = order(SIDE_BUY, quantity, stock.symbol)
                                             if orderSuccess == "success":
-                                                print("Bought")
+                                                #print("Bought")
+                                                test = generalChannel.send("Bought " + str(quantity) + " * " + str(stock.prices[-1]) + " of " + str(stock.symbol))
+                                                test2 = generalChannel.send("Total: " + str(budget))
+                                                fut = asyncio.run_coroutine_threadsafe(test, bot.loop)
+                                                fut2 = asyncio.run_coroutine_threadsafe(test2, bot.loop)
+                                                try:
+                                                    fut.result()
+                                                    fut2.result()
+                                                
+                                                except Exception as e:
+                                                    print("Sending Message: " + str(e))
+
                                                 #await generalChannel.send("Bought " + str(quantity) + " of " + str(stock.symbol))
                                                 #await generalChannel.send("Total: " + str(budget))
                                                 stock.priceBoughtAt = stock.prices[-1] 
@@ -205,12 +238,12 @@ async def sell():
                         # percentChange = (priceChange / stock.priceBoughtAt) * 100
                         moneyMade = priceChange * stock.quantityBought - fees
 
-                        # highestPredicted = 0
-                        # for price in stock.predictedPrices:
-                        #     if highestPredicted < price:
-                        #         highestPredicted = price  
+                        highestPredicted = 0
+                        for price in stock.predictedPrices:
+                            if highestPredicted < price:
+                                highestPredicted = price  
                         
-                        if abs(moneyMade) > stock.quantityBought * stock.priceBoughtAt * 0.02 or (moneyMade > 0 and stock.predictedPrices[-1] < stock.prices[-1]):
+                        if abs(moneyMade) > stock.quantityBought * stock.priceBoughtAt * 0.02 or (highestPredicted < stock.prices[-1]):
                             print("Sell " + stock.symbol)
                             for balance in balances:
                                 if float(balance['free']) > 0 and stock.symbol.find(balance['asset']) == 0:
@@ -240,7 +273,18 @@ async def sell():
                             
                             orderSuccess = order(SIDE_SELL, quantity, stock.symbol)
                             if orderSuccess == "success":
-                                print("Sold")
+                                #print("Sold")
+                                test = generalChannel.send("Sold " + str(quantity) + " * " + str(stock.prices[-1]) + " of " + str(stock.symbol))
+                                test2 = generalChannel.send("Money Made: " + str(moneyMade))
+                                fut = asyncio.run_coroutine_threadsafe(test, bot.loop)
+                                fut2 = asyncio.run_coroutine_threadsafe(test2, bot.loop)
+                                try:
+                                    fut.result()
+                                    fut2.result()
+                                
+                                except Exception as e:
+                                    print("Sending Message: " + str(e))
+                                
                                 #await generalChannel.send("Sold " + str(stock.quantityBought) + " of " + str(stock.symbol))
                                 #await generalChannel.send("Money Made: " + str(moneyMade))
                                 stock.priceBoughtAt = 0
@@ -251,7 +295,7 @@ async def sell():
                                 quantity = quantity - stepSize
                                 orderSuccess = order(SIDE_SELL, quantity, stock.symbol) 
                                 if orderSuccess == "success":
-                                    print("Sold finally")   
+                                    #print("Sold finally")   
                                     stock.priceBoughtAt = 0
                                     stock.quantityBought = 0
                                     stock.alreadyHave = False  
@@ -288,7 +332,9 @@ async def predictPrice():
                     stock.predictedPrices.append(prediction)
                     #print(stock.symbol + ": " + str(prediction))
                     while len(stock.predictedPrices) > predictedPoints:
-                        stock.predictedPrices.pop(0)                                
+                        stock.predictedPrices.pop(0)   
+
+            await asyncio.sleep(refreshRate)                             
 
     except Exception as e:
         print("Predict Price: " + str(e))
@@ -363,16 +409,16 @@ async def on_ready():
     try:
         t1 = threading.Thread(target=asyncio.run, args=(collectData(),))
         t1.start()
-        t2 = threading.Thread(target=asyncio.run, args=(predictPrice(),))
-        t2.start()
-        t3 = threading.Thread(target=asyncio.run, args=(buy(),))
-        t3.start()
-        t4 = threading.Thread(target=asyncio.run, args=(sell(),))
-        t4.start()
-        #t5 = threading.Thread(target=asyncio.run, args=(twitterReview(),))
-        #t5.start()
-        t6 = threading.Thread(target=asyncio.run, args=(train(),))
-        t6.start()
+        # t2 = threading.Thread(target=asyncio.run, args=(predictPrice(),))
+        # t2.start()
+        # t3 = threading.Thread(target=asyncio.run, args=(buy(),))
+        # t3.start()
+        # t4 = threading.Thread(target=asyncio.run, args=(sell(),))
+        # t4.start()
+        # t5 = threading.Thread(target=asyncio.run, args=(twitterReview(),))
+        # t5.start()
+        # t6 = threading.Thread(target=asyncio.run, args=(train(),))
+        # t6.start()
 
     except Exception as e:
         print("On Ready: " + str(e))      
