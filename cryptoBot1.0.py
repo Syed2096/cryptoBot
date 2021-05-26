@@ -19,6 +19,7 @@ from textblob import TextBlob
 import textblob
 import tweepy
 import re
+import time as t
 
 #Log into binance api
 client = Client(config.binanceApiKey, config.binanceApiSecret)
@@ -55,12 +56,15 @@ try:
 except:
     print("Collect Data Mode")
 
-prediction_days = 800
-predictedPoints = 120
+#Neural Network Settings, predictionRequired must be lower than dataPoints
+predictionRequired = 400
+predictAhead = 60
+predictedPoints = 200 + predictAhead
 
-#Number of data points and refresh rate in seconds
-dataPoints = 1000
-refreshRate = 120
+
+#Number of data points and refresh rate in seconds, dataPoints shouldn't go below 500
+dataPoints = 500
+refreshRate = 300
 #Time to collect data = dataPoints * refreshRate / 60 mins
 
 #Multiplier for trades, 1 means it will buy all it can, 0.5 means it will trade with half the money in one trade and could spend the other half on another or split it up more
@@ -97,18 +101,94 @@ for stock in stocks:
 print(test)
 """
 
+@bot.event
+async def on_ready():
+    try:
+        
+        for stock in stocks:
+            if len(stock.prices) < dataPoints:
+                candles = client.get_klines(symbol=stock.symbol, interval=Client.KLINE_INTERVAL_5MINUTE)
+                
+                for candle in candles:
+                    stock.prices.append(float(candle[3]))
+
+                while len(stock.prices) > dataPoints:
+                    stock.prices.pop(0)
+        
+        with open("crypto.txt", "wb") as filehandler:
+            pickle.dump(stocks, filehandler, pickle.HIGHEST_PROTOCOL)
+        
+        #If no model already exists uncomment this code
+        for stock in stocks:
+            
+            #Prepare data
+            scaler = MinMaxScaler(feature_range=(0, 1))
+            #scaled_data = scaler.fit_transform(data['Close'].values.reshape(-1, 1))
+            prices = np.array(stock.prices)
+            scaled_data = scaler.fit_transform(prices.reshape(-1, 1))
+
+            x_train = []
+            y_train = []
+
+            for x in range(predictionRequired, len(scaled_data) - predictAhead):
+                x_train.append(scaled_data[x - predictionRequired:x, 0])
+                y_train.append(scaled_data[x + predictAhead, 0])
+
+            x_train, y_train = np.array(x_train), np.array(y_train)
+            x_train = np.reshape(x_train, (x_train.shape[0], x_train.shape[1], 1))
+                
+            try:
+                model = load_model("model.h5")
+
+            except:    
+                #Build model
+                model = Sequential()
+
+                #Experiment with layers, more layers longer time to train
+                model.add(LSTM(units=50, return_sequences=True, input_shape=(x_train.shape[1], 1)))
+                model.add(Dropout(0.2))
+                model.add(LSTM(units=50, return_sequences=True))
+                model.add(Dropout(0.2))
+                model.add(LSTM(units=50))
+                model.add(Dropout(0.2))
+                model.add(Dense(units=1)) #Prediction of next closing value
+
+                model.compile(optimizer='adam', loss='mean_squared_error')
+                #Epoch = how many times model sees data, batchsize = how many units it sees at once
+
+            model.fit(x_train, y_train, epochs=100, batch_size=100)
+            model.save('model.h5')
+        
+        # t1 = threading.Thread(target=asyncio.run, args=(collectData(),))
+        # t1.start()
+        # t2 = threading.Thread(target=asyncio.run, args=(predictPrice(),))
+        # t2.start()
+        # t3 = threading.Thread(target=asyncio.run, args=(buy(),))
+        # t3.start()
+        # t4 = threading.Thread(target=asyncio.run, args=(sell(),))
+        # t4.start()
+        # t5 = threading.Thread(target=asyncio.run, args=(twitterReview(),))
+        # t5.start()
+        # t6 = threading.Thread(target=asyncio.run, args=(train(),))
+        # t6.start()
+
+    except Exception as e:
+        print("On Ready: " + str(e))      
+
 async def collectData():
     try:
-        #Loop forever
+        
+        generalChannel = bot.get_channel(805608327538278423)
+        test = generalChannel.send("Done Collecting Data")
+        fut = asyncio.run_coroutine_threadsafe(test, bot.loop)
+        try:
+             fut.result()
+        except Exception as e:
+            print("Send Message: " + str(e))  
+        
         while True:
-            # generalChannel = bot.get_channel(805608327538278423)
-            # test = generalChannel.send("Online")
-            # fut = asyncio.run_coroutine_threadsafe(test, bot.loop)
-            # try:
-            #     fut.result()
-            # except Exception as e:
-            #     print("Send Message: " + str(e))  
-
+                        
+            start = t.time()
             tickers = client.get_all_tickers()
             #Fill information till there are enough data points
             for stock in stocks:
@@ -125,8 +205,11 @@ async def collectData():
             #os.remove("crypto.txt")
             with open("crypto.txt", "wb") as filehandler:
                 pickle.dump(stocks, filehandler, pickle.HIGHEST_PROTOCOL)
+
+            end = t.time()                              
+            newRefresh = round(refreshRate - (end - start))
             
-            await asyncio.sleep(refreshRate)
+            await asyncio.sleep(newRefresh)
 
     except Exception as e:
         print("Collect Data: " + str(e))
@@ -178,12 +261,12 @@ async def buy():
                                         takerFees = float(fees['tradeFee'][0]['taker'])
                                         fees = makerFees + takerFees
 
-                                        highestPredicted = 0
-                                        for price in stock.predictedPrices:
-                                             if highestPredicted < price:
-                                                 highestPredicted = price  
+                                        # highestPredicted = 0
+                                        # for price in stock.predictedPrices:
+                                        #      if highestPredicted < price:
+                                        #          highestPredicted = price  
 
-                                        priceChange = (float(highestPredicted) - stock.prices[-1])
+                                        priceChange = (float(stock.predictedPrices) - stock.prices[-1])
                                         #percentChange = (priceChange / stock.prices[-1]) * 100
                                         moneyMade = priceChange * quantity - fees
                                         #print("MoneyMade: " + str(moneyMade))
@@ -238,12 +321,12 @@ async def sell():
                         # percentChange = (priceChange / stock.priceBoughtAt) * 100
                         moneyMade = priceChange * stock.quantityBought - fees
 
-                        highestPredicted = 0
-                        for price in stock.predictedPrices:
-                            if highestPredicted < price:
-                                highestPredicted = price  
+                        # highestPredicted = 0
+                        # for price in stock.predictedPrices:
+                        #     if highestPredicted < price:
+                        #         highestPredicted = price  
                         
-                        if abs(moneyMade) > stock.quantityBought * stock.priceBoughtAt * 0.02 or (highestPredicted < stock.prices[-1]):
+                        if abs(moneyMade) > stock.quantityBought * stock.priceBoughtAt * 0.02 or (stock.predictedPrices[-1] < stock.prices[-1]):
                             print("Sell " + stock.symbol)
                             for balance in balances:
                                 if float(balance['free']) > 0 and stock.symbol.find(balance['asset']) == 0:
@@ -310,19 +393,28 @@ async def sell():
 
 async def predictPrice():
     try:
-        while True:            
+        generalChannel = bot.get_channel(805608327538278423)
+        test = generalChannel.send("Done Creating Model")
+        fut = asyncio.run_coroutine_threadsafe(test, bot.loop)
+        try:
+             fut.result()
+        except Exception as e:
+            print("Send Message: " + str(e))  
+
+        while True: 
+            start = t.time()           
             for stock in stocks:
-                if len(stock.prices) >= prediction_days:
+                if len(stock.prices) >= predictionRequired:
                     scaler = MinMaxScaler(feature_range=(0, 1))
                     prices = np.array(stock.prices).reshape(-1, 1)
                     scaler = scaler.fit(prices)
                     total_dataset = stock.prices
 
-                    model_inputs = np.array(total_dataset[len(total_dataset) - prediction_days:]).reshape(-1, 1)
+                    model_inputs = np.array(total_dataset[len(total_dataset) - predictionRequired:]).reshape(-1, 1)
                     model_inputs = scaler.transform(model_inputs)
 
                     #Predict Next period
-                    real_data = [model_inputs[len(model_inputs) - prediction_days:len(model_inputs + 1), 0]]
+                    real_data = [model_inputs[len(model_inputs) - predictionRequired:len(model_inputs + 1), 0]]
                     real_data = np.array(real_data)
                     real_data = np.reshape(real_data, (real_data.shape[0], real_data.shape[1], 1))
 
@@ -332,9 +424,13 @@ async def predictPrice():
                     stock.predictedPrices.append(prediction)
                     #print(stock.symbol + ": " + str(prediction))
                     while len(stock.predictedPrices) > predictedPoints:
-                        stock.predictedPrices.pop(0)   
-
-            await asyncio.sleep(refreshRate)                             
+                        stock.predictedPrices.pop(0) 
+            
+            end = t.time()                              
+            newRefresh = round(refreshRate - (end - start))
+            
+            if newRefresh > 0:
+                await asyncio.sleep(newRefresh)
 
     except Exception as e:
         print("Predict Price: " + str(e))
@@ -353,9 +449,9 @@ async def train():
                     x_train = []
                     y_train = []
 
-                    for x in range(prediction_days, len(scaled_data) - predictedPoints):
-                        x_train.append(scaled_data[x - prediction_days:x, 0])
-                        y_train.append(scaled_data[x + predictedPoints, 0])
+                    for x in range(predictionRequired, len(scaled_data) - predictAhead):
+                        x_train.append(scaled_data[x - predictionRequired:x, 0])
+                        y_train.append(scaled_data[x + predictAhead, 0])
 
                     x_train, y_train = np.array(x_train), np.array(y_train)
                     x_train = np.reshape(x_train, (x_train.shape[0], x_train.shape[1], 1)) 
@@ -404,25 +500,6 @@ async def twitterReview():
     except Exception as e:
         print("Twitter Review: " + str(e))
 
-@bot.event
-async def on_ready():
-    try:
-        t1 = threading.Thread(target=asyncio.run, args=(collectData(),))
-        t1.start()
-        # t2 = threading.Thread(target=asyncio.run, args=(predictPrice(),))
-        # t2.start()
-        # t3 = threading.Thread(target=asyncio.run, args=(buy(),))
-        # t3.start()
-        # t4 = threading.Thread(target=asyncio.run, args=(sell(),))
-        # t4.start()
-        # t5 = threading.Thread(target=asyncio.run, args=(twitterReview(),))
-        # t5.start()
-        # t6 = threading.Thread(target=asyncio.run, args=(train(),))
-        # t6.start()
-
-    except Exception as e:
-        print("On Ready: " + str(e))      
-
 @bot.command(name='time')
 async def time(context):
     try:
@@ -434,26 +511,34 @@ async def time(context):
 @bot.command(name='price')
 async def price(context, arg1):
     try:
-        tickers = client.get_all_tickers()
         price = None
         for stock in stocks:
-            if stock.symbol == arg1:
+            if stock.symbol == arg1.upper() or stock.symbol == arg1.upper() + "USDT":
                 price = stock.prices[-1]  
+                predictedPrices = np.array(stock.predictedPrices).reshape(-1)
 
+                #Last 200 points
                 prices = []
                 for i in range(len(stock.prices) - 200, len(stock.prices)):
                     prices.append(stock.prices[i])
-
+                
+                #First 200 points
+                predicted = []
+                if len(predictedPrices) >= 200:
+                    for i in range(0, len(predictedPrices) - 60):
+                        predicted.append(predictedPrices[i])
+              
                 plt.style.use('dark_background')   
                 plt.plot(prices, color='white', label=f"Actual {stock.symbol} Price")
+                plt.plot(predicted, color='green', label=f"Predicted {stock.symbol} Price")
                 break
                
         if price == None:
             await context.message.channel.send("Not on binance")
         
         else:
-            await context.message.channel.send(str(arg1) + ": " + str(price))
-            plt.savefig(fname='plot')
+            await context.message.channel.send(str(stock.symbol) + " Price: " + str(price))
+            plt.savefig(fname='plot', transparent=True)
             await context.message.channel.send(file=discord.File("plot.png"))
             os.remove("plot.png")
             plt.clf()
@@ -466,21 +551,32 @@ async def predict(context, arg1):
     try:      
 
         prediction = None
-        for i in stocks:
+        for stock in stocks:
             
-            if i.symbol == arg1:
-                prediction = i.predictedPrices[-1]
-                predictedPrices = np.array(i.predictedPrices).reshape(-1)
+            if stock.symbol == arg1.upper() or stock.symbol == arg1.upper() + "USDT":
+                
+                prediction = stock.predictedPrices[-1]
+                predictedPrices = np.array(stock.predictedPrices).reshape(-1)
+
+                if len(predictedPrices) <= 60:
+                    await context.message.channel.send(str(len(predictedPrices)) + "/" + "60")
+                    break
+
+                #Last 60 points
+                predicted = []
+                for i in range(len(predictedPrices) - 60, len(predictedPrices)):
+                    predicted.append(predictedPrices[i])
+
                 plt.style.use('dark_background')   
-                plt.plot(predictedPrices, color='white', label=f"Predicted {i.symbol} Price")
+                plt.plot(predicted, color='green', label=f"Predicted {stock.symbol} Price")
                 break
         
         if prediction == None:
             await context.message.channel.send("Isn't on binance")
         
         else:
-            await context.message.channel.send("Prediction: " + str(prediction))
-            plt.savefig(fname='plot')
+            await context.message.channel.send(str(stock.symbol) + " Prediction: " + str(prediction))
+            plt.savefig(fname='plot', transparent=True)
             await context.message.channel.send(file=discord.File("plot.png"))
             os.remove("plot.png")
             plt.clf()
