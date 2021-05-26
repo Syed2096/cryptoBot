@@ -1,0 +1,7 @@
+discordBot = ""
+binanceApiKey = ""
+binanceApiSecret = ""
+twitterApiKey = ""
+twitterApiSecretKey = ""
+twitterAccessToken = ""
+twitterAccessTokenSecret = ""
