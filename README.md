@@ -17,3 +17,5 @@ How to Run:
 
 Warning: Your entire binance account will be used by the bot, you could lose everything. You can still make trades yourself, however the bot will make any trades it sees fit.
 This bot gets better the longer it runs, eventually it should theoretically be able to make a profit more often than not.
+
+I am currently in the process of testing the bot out myself, so far its been good but it requires a lot of time.
