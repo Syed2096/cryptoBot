@@ -5,7 +5,7 @@ How to Run:
 1. Download neccesary libraries, python, etc.
 2. Get twitter token or comment it out this feature wasn't very good, discord server token, binance tokens, etc.
 3. Add tokens to config file.
-4. Also change discord channel ID to your own channel ID.
+4. Also change discord channel ID to your own channel ID. (lines 221 and 309)
 5. Start the program. (Should take 5 hours).
 6. Once the program has completed its run. Comment out lines 122 to 160 and uncomment 162 - 165, 172, and 173.
 7. Delete crypto.txt and restart the program. 
