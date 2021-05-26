@@ -119,58 +119,58 @@ async def on_ready():
             pickle.dump(stocks, filehandler, pickle.HIGHEST_PROTOCOL)
         
         #If no model already exists uncomment this code
-        for stock in stocks:
+        # for stock in stocks:
             
-            #Prepare data
-            scaler = MinMaxScaler(feature_range=(0, 1))
-            #scaled_data = scaler.fit_transform(data['Close'].values.reshape(-1, 1))
-            prices = np.array(stock.prices)
-            scaled_data = scaler.fit_transform(prices.reshape(-1, 1))
+        #     #Prepare data
+        #     scaler = MinMaxScaler(feature_range=(0, 1))
+        #     #scaled_data = scaler.fit_transform(data['Close'].values.reshape(-1, 1))
+        #     prices = np.array(stock.prices)
+        #     scaled_data = scaler.fit_transform(prices.reshape(-1, 1))
 
-            x_train = []
-            y_train = []
+        #     x_train = []
+        #     y_train = []
 
-            for x in range(predictionRequired, len(scaled_data) - predictAhead):
-                x_train.append(scaled_data[x - predictionRequired:x, 0])
-                y_train.append(scaled_data[x + predictAhead, 0])
+        #     for x in range(predictionRequired, len(scaled_data) - predictAhead):
+        #         x_train.append(scaled_data[x - predictionRequired:x, 0])
+        #         y_train.append(scaled_data[x + predictAhead, 0])
 
-            x_train, y_train = np.array(x_train), np.array(y_train)
-            x_train = np.reshape(x_train, (x_train.shape[0], x_train.shape[1], 1))
+        #     x_train, y_train = np.array(x_train), np.array(y_train)
+        #     x_train = np.reshape(x_train, (x_train.shape[0], x_train.shape[1], 1))
                 
-            try:
-                model = load_model("model.h5")
+        #     try:
+        #         model = load_model("model.h5")
 
-            except:    
-                #Build model
-                model = Sequential()
+        #     except:    
+        #         #Build model
+        #         model = Sequential()
 
-                #Experiment with layers, more layers longer time to train
-                model.add(LSTM(units=50, return_sequences=True, input_shape=(x_train.shape[1], 1)))
-                model.add(Dropout(0.2))
-                model.add(LSTM(units=50, return_sequences=True))
-                model.add(Dropout(0.2))
-                model.add(LSTM(units=50))
-                model.add(Dropout(0.2))
-                model.add(Dense(units=1)) #Prediction of next closing value
+        #         #Experiment with layers, more layers longer time to train
+        #         model.add(LSTM(units=50, return_sequences=True, input_shape=(x_train.shape[1], 1)))
+        #         model.add(Dropout(0.2))
+        #         model.add(LSTM(units=50, return_sequences=True))
+        #         model.add(Dropout(0.2))
+        #         model.add(LSTM(units=50))
+        #         model.add(Dropout(0.2))
+        #         model.add(Dense(units=1)) #Prediction of next closing value
 
-                model.compile(optimizer='adam', loss='mean_squared_error')
-                #Epoch = how many times model sees data, batchsize = how many units it sees at once
+        #         model.compile(optimizer='adam', loss='mean_squared_error')
+        #         #Epoch = how many times model sees data, batchsize = how many units it sees at once
 
-            model.fit(x_train, y_train, epochs=100, batch_size=100)
-            model.save('model.h5')
+        #     model.fit(x_train, y_train, epochs=100, batch_size=100)
+        #     model.save('model.h5')
         
-        # t1 = threading.Thread(target=asyncio.run, args=(collectData(),))
-        # t1.start()
-        # t2 = threading.Thread(target=asyncio.run, args=(predictPrice(),))
-        # t2.start()
+        t1 = threading.Thread(target=asyncio.run, args=(collectData(),))
+        t1.start()
+        t2 = threading.Thread(target=asyncio.run, args=(predictPrice(),))
+        t2.start()
         # t3 = threading.Thread(target=asyncio.run, args=(buy(),))
         # t3.start()
         # t4 = threading.Thread(target=asyncio.run, args=(sell(),))
         # t4.start()
         # t5 = threading.Thread(target=asyncio.run, args=(twitterReview(),))
         # t5.start()
-        # t6 = threading.Thread(target=asyncio.run, args=(train(),))
-        # t6.start()
+        t6 = threading.Thread(target=asyncio.run, args=(train(),))
+        t6.start()
 
     except Exception as e:
         print("On Ready: " + str(e))      
@@ -261,12 +261,12 @@ async def buy():
                                         takerFees = float(fees['tradeFee'][0]['taker'])
                                         fees = makerFees + takerFees
 
-                                        # highestPredicted = 0
-                                        # for price in stock.predictedPrices:
-                                        #      if highestPredicted < price:
-                                        #          highestPredicted = price  
+                                        highestPredicted = 0
+                                        for price in stock.predictedPrices:
+                                            if highestPredicted < price:
+                                                highestPredicted = price  
 
-                                        priceChange = (float(stock.predictedPrices) - stock.prices[-1])
+                                        priceChange = (float(highestPredicted) - stock.prices[-1])
                                         #percentChange = (priceChange / stock.prices[-1]) * 100
                                         moneyMade = priceChange * quantity - fees
                                         #print("MoneyMade: " + str(moneyMade))
@@ -321,12 +321,12 @@ async def sell():
                         # percentChange = (priceChange / stock.priceBoughtAt) * 100
                         moneyMade = priceChange * stock.quantityBought - fees
 
-                        # highestPredicted = 0
-                        # for price in stock.predictedPrices:
-                        #     if highestPredicted < price:
-                        #         highestPredicted = price  
+                        highestPredicted = 0
+                        for price in stock.predictedPrices:
+                            if highestPredicted < price:
+                                highestPredicted = price  
                         
-                        if abs(moneyMade) > stock.quantityBought * stock.priceBoughtAt * 0.02 or (stock.predictedPrices[-1] < stock.prices[-1]):
+                        if abs(moneyMade) > stock.quantityBought * stock.priceBoughtAt * 0.02 or (highestPredicted < stock.prices[-1]):
                             print("Sell " + stock.symbol)
                             for balance in balances:
                                 if float(balance['free']) > 0 and stock.symbol.find(balance['asset']) == 0:
