@@ -6,9 +6,7 @@ How to Run:
 2. Get twitter token or comment it out this feature wasn't very good, discord server token, binance tokens, etc.
 3. Add tokens to config file.
 4. Also change discord channel ID to your own channel ID. (lines 221 and 309)
-5. Start the program. (Should take 5 hours).
-6. Once the program has completed its run. Comment out lines 122 to 160 and uncomment 162 - 165, 172, and 173.
-7. Delete crypto.txt and restart the program. 
+5. Start the program. 
 8. Use !price "exchange" and !predict "exchange", to view the bots thought process. "exchange" refers to BTCUSDT, DOGEBTC and all other coins on binance.
 9. !price will start showing predictions on the same graph as prices once there are enough predictions.
 10. Once, you are happy with the bots predictions stop the program. (Recommended time to run before step 11 would be 2 days)
