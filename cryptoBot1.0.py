@@ -297,7 +297,7 @@ async def buy():
                                             elif orderSuccess.find("Market is closed"):
                                                 stock.marketClosed = True                            
             
-                await asyncio.sleep(1)   
+                # await asyncio.sleep(1)   
 
     except Exception as e:
         print("Buy: " + str(e))
@@ -386,7 +386,7 @@ async def sell():
                                 else:
                                     stock.alreadyHave = False                      
         
-                await asyncio.sleep(1)   
+                # await asyncio.sleep(1)   
 
     except Exception as e:
         print("Sell: " + str(e))
