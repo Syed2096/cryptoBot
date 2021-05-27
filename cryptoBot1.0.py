@@ -61,7 +61,6 @@ predictionRequired = 400
 predictAhead = 60
 predictedPoints = 200 + predictAhead
 
-
 #Number of data points and refresh rate in seconds, dataPoints shouldn't go below 500
 dataPoints = 500
 refreshRate = 300
@@ -178,13 +177,13 @@ async def on_ready():
 async def collectData():
     try:
         
-        # generalChannel = bot.get_channel(805608327538278423)
-        # test = generalChannel.send("Done Collecting Data")
-        # fut = asyncio.run_coroutine_threadsafe(test, bot.loop)
-        # try:
-        #      fut.result()
-        # except Exception as e:
-        #     print("Send Message: " + str(e))  
+        generalChannel = bot.get_channel(805608327538278423)
+        test = generalChannel.send("Done Collecting Data")
+        fut = asyncio.run_coroutine_threadsafe(test, bot.loop)
+        try:
+            fut.result()
+        except Exception as e:
+            print("Send Message: " + str(e))  
         
         while True:
                         
@@ -525,7 +524,7 @@ async def price(context, arg1):
                 #First 200 points
                 predicted = []
                 if len(predictedPrices) >= 200:
-                    for i in range(0, len(predictedPrices) - 60):
+                    for i in range(0, len(predictedPrices) - predictAhead):
                         predicted.append(predictedPrices[i])
               
                 plt.style.use('dark_background')   
@@ -558,14 +557,14 @@ async def predict(context, arg1):
                 prediction = stock.predictedPrices[-1]
                 predictedPrices = np.array(stock.predictedPrices).reshape(-1)
 
-                if len(predictedPrices) <= 60:
-                    await context.message.channel.send(str(len(predictedPrices)) + "/" + "60")
-                    break
-
                 #Last 60 points
-                predicted = []
-                for i in range(len(predictedPrices) - 60, len(predictedPrices)):
-                    predicted.append(predictedPrices[i])
+                if len(predictedPrices) >= predictAhead:
+                    predicted = []
+                    for i in range(len(predictedPrices) - predictAhead, len(predictedPrices)):
+                        predicted.append(predictedPrices[i])
+                
+                else:
+                    predicted = predictedPrices
 
                 plt.style.use('dark_background')   
                 plt.plot(predicted, color='green', label=f"Predicted {stock.symbol} Price")
