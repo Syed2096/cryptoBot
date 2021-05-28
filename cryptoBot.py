@@ -1,6 +1,5 @@
 from binance.client import Client
 from discord.ext import commands
-from numpy.lib.function_base import _quantile_is_valid
 import config
 import asyncio
 import pickle
@@ -49,7 +48,7 @@ class Stock:
 stocks = []
 tickers = client.get_all_tickers()
 
-#Load model
+#Load model (Single Model Method)
 try:
     model = load_model("model.h5")
 
@@ -73,6 +72,8 @@ budgetTolerance = 0.5
 tweetAmount = 100
 twitterRefreshRate = 900
 
+ranOnce = False
+
 #Open file
 try:
     with open("crypto.txt", "rb") as filehandler:
@@ -90,86 +91,80 @@ if len(stocks) == 0:
     for ticker in tickers:
         stocks.append(Stock(ticker['symbol']))
 
-"""
-test = 0
-for stock in stocks:
-    if stock.marketClosed == False:
-        print(stock.symbol)
-        test = test + 1
-
-print(test)
-"""
-
 @bot.event
 async def on_ready():
     try:
         
-        for stock in stocks:
-            if len(stock.prices) < dataPoints:
-                candles = client.get_klines(symbol=stock.symbol, interval=Client.KLINE_INTERVAL_5MINUTE)
-                
-                for candle in candles:
-                    stock.prices.append(float(candle[3]))
+        # print("Please Once")
+        global ranOnce
+        if ranOnce == False:
+            ranOnce = True
+            for stock in stocks:
+                if len(stock.prices) < dataPoints:
+                    candles = client.get_klines(symbol=stock.symbol, interval=Client.KLINE_INTERVAL_5MINUTE)
+                    
+                    for candle in candles:
+                        stock.prices.append(float(candle[3]))
 
-                while len(stock.prices) > dataPoints:
-                    stock.prices.pop(0)
-        
-        with open("crypto.txt", "wb") as filehandler:
-            pickle.dump(stocks, filehandler, pickle.HIGHEST_PROTOCOL)
-        
-        #If no model already exists uncomment this code
-        # for stock in stocks:
+                    while len(stock.prices) > dataPoints:
+                        stock.prices.pop(0)
             
-        #     #Prepare data
-        #     scaler = MinMaxScaler(feature_range=(0, 1))
-        #     #scaled_data = scaler.fit_transform(data['Close'].values.reshape(-1, 1))
-        #     prices = np.array(stock.prices)
-        #     scaled_data = scaler.fit_transform(prices.reshape(-1, 1))
-
-        #     x_train = []
-        #     y_train = []
-
-        #     for x in range(predictionRequired, len(scaled_data) - predictAhead):
-        #         x_train.append(scaled_data[x - predictionRequired:x, 0])
-        #         y_train.append(scaled_data[x + predictAhead, 0])
-
-        #     x_train, y_train = np.array(x_train), np.array(y_train)
-        #     x_train = np.reshape(x_train, (x_train.shape[0], x_train.shape[1], 1))
+            with open("crypto.txt", "wb") as filehandler:
+                pickle.dump(stocks, filehandler, pickle.HIGHEST_PROTOCOL)
+            
+            #If no model already exists uncomment this code
+            # for stock in stocks:
                 
-        #     try:
-        #         model = load_model("model.h5")
+            #     #Prepare data
+            #     scaler = MinMaxScaler(feature_range=(0, 1))
+            #     #scaled_data = scaler.fit_transform(data['Close'].values.reshape(-1, 1))
+            #     prices = np.array(stock.prices)
+            #     scaled_data = scaler.fit_transform(prices.reshape(-1, 1))
 
-        #     except:    
-        #         #Build model
-        #         model = Sequential()
+            #     x_train = []
+            #     y_train = []
 
-        #         #Experiment with layers, more layers longer time to train
-        #         model.add(LSTM(units=50, return_sequences=True, input_shape=(x_train.shape[1], 1)))
-        #         model.add(Dropout(0.2))
-        #         model.add(LSTM(units=50, return_sequences=True))
-        #         model.add(Dropout(0.2))
-        #         model.add(LSTM(units=50))
-        #         model.add(Dropout(0.2))
-        #         model.add(Dense(units=1)) #Prediction of next closing value
+            #     for x in range(predictionRequired, len(scaled_data) - predictAhead):
+            #         x_train.append(scaled_data[x - predictionRequired:x, 0])
+            #         y_train.append(scaled_data[x + predictAhead, 0])
 
-        #         model.compile(optimizer='adam', loss='mean_squared_error')
-        #         #Epoch = how many times model sees data, batchsize = how many units it sees at once
+            #     x_train, y_train = np.array(x_train), np.array(y_train)
+            #     x_train = np.reshape(x_train, (x_train.shape[0], x_train.shape[1], 1))
+                    
+            #     try:
+            #         model = load_model("model.h5")
 
-        #     model.fit(x_train, y_train, epochs=100, batch_size=100)
-        #     model.save('model.h5')
+            #     except:    
+            #         #Build model
+            #         model = Sequential()
+
+            #         #Experiment with layers, more layers longer time to train
+            #         model.add(LSTM(units=50, return_sequences=True, input_shape=(x_train.shape[1], 1)))
+            #         model.add(Dropout(0.2))
+            #         model.add(LSTM(units=50, return_sequences=True))
+            #         model.add(Dropout(0.2))
+            #         model.add(LSTM(units=50))
+            #         model.add(Dropout(0.2))
+            #         model.add(Dense(units=1)) #Prediction of next closing value
+
+            #         model.compile(optimizer='adam', loss='mean_squared_error')
+            #         #Epoch = how many times model sees data, batchsize = how many units it sees at once
+
+            #     model.fit(x_train, y_train, epochs=100, batch_size=100)
+            #     model.save('model.h5')
         
-        t1 = threading.Thread(target=asyncio.run, args=(collectData(),))
-        t1.start()
-        t2 = threading.Thread(target=asyncio.run, args=(predictPrice(),))
-        t2.start()
-        # t3 = threading.Thread(target=asyncio.run, args=(buy(),))
-        # t3.start()
-        # t4 = threading.Thread(target=asyncio.run, args=(sell(),))
-        # t4.start()
-        # t5 = threading.Thread(target=asyncio.run, args=(twitterReview(),))
-        # t5.start()
-        t6 = threading.Thread(target=asyncio.run, args=(train(),))
-        t6.start()
+            t1 = threading.Thread(target=asyncio.run, args=(collectData(),))
+            t1.start()
+            t2 = threading.Thread(target=asyncio.run, args=(predictPrice(),))
+            t2.start()
+            # t3 = threading.Thread(target=asyncio.run, args=(buy(),))
+            # t3.start()
+            # t4 = threading.Thread(target=asyncio.run, args=(sell(),))
+            # t4.start()
+            # t5 = threading.Thread(target=asyncio.run, args=(twitterReview(),))
+            # t5.start()
+            t6 = threading.Thread(target=asyncio.run, args=(train(),))
+            t6.start()
 
     except Exception as e:
         print("On Ready: " + str(e))      
@@ -404,6 +399,7 @@ async def predictPrice():
             start = t.time()           
             for stock in stocks:
                 if len(stock.prices) >= predictionRequired:
+                    
                     scaler = MinMaxScaler(feature_range=(0, 1))
                     prices = np.array(stock.prices).reshape(-1, 1)
                     scaler = scaler.fit(prices)
@@ -424,8 +420,8 @@ async def predictPrice():
                     #print(stock.symbol + ": " + str(prediction))
                     while len(stock.predictedPrices) > predictedPoints:
                         stock.predictedPrices.pop(0) 
-            
-            end = t.time()                              
+
+            end = t.time()                                                            
             newRefresh = round(refreshRate - (end - start))
             
             if newRefresh > 0:
@@ -439,6 +435,7 @@ async def train():
         while True:        
             for stock in stocks:
                 if len(stock.prices) == dataPoints:
+
                     #Prepare data
                     scaler = MinMaxScaler(feature_range=(0, 1))
                     #scaled_data = scaler.fit_transform(data['Close'].values.reshape(-1, 1))
@@ -459,7 +456,7 @@ async def train():
                     model.fit(x_train, y_train, epochs=100, batch_size=100)
                     
                     #Update model
-                    model.save('model.h5')           
+                    model.save('model.h5') 
 
     except Exception as e:
         print("Train: " + str(e))
@@ -506,6 +503,21 @@ async def time(context):
 
     except Exception as e:
         print("Time: " + str(e))
+
+@bot.command(name='file')
+async def time(context):
+    try:
+        for stock in stocks:
+            fileName = "./models" + stock.symbol + "Model.h5"
+            try:
+                model = load_model(fileName)
+            
+            except:
+                await context.message.channel.send("Models not completed")
+                break
+
+    except Exception as e:
+        print("Files: " + str(e))
 
 @bot.command(name='price')
 async def price(context, arg1):
