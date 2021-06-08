@@ -9,7 +9,7 @@ How to Run:
 5. Start the program. 
 8. Use !price "exchange" and !predict "exchange", to view the bots thought process. "exchange" refers to BTCUSDT, DOGEBTC and all other coins on binance.
 9. !price will start showing predictions on the same graph as prices once there are enough predictions.
-10. Once, you are happy with the bots predictions stop the program. (Recommended time to run before next step would be 1 week)
+10. Once, you are happy with the bots predictions stop the program. (Recommended time to run before next step would be 1 week, but no idea if the bot is even good)
 11. Uncomment out lines 160 - 163, this will allow the bot to buy and sell. Also comment out lines 166 and 167, to stop messing with the bots brain.
 12. Delete crypto.txt and start program.
 
