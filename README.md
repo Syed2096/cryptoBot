@@ -12,5 +12,6 @@ How to Run:
 10. Once, you are happy with the bots predictions stop the program. (Recommended time to run before next step would be 1 week, but no idea if the bot is even good)
 11. Uncomment out lines 160 - 163, this will allow the bot to buy and sell. Also comment out lines 166 and 167, to stop messing with the bots brain.
 12. Delete crypto.txt and start program.
+13. !status will show current trades and price change. It will show nothing if no trades were made.
 
 Warning: Your entire binance account will be used by the bot, you could lose everything. You can still make trades yourself, however the bot will make any trades it sees fit.
